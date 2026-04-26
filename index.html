@@ -45,6 +45,10 @@ header img { height:45px; margin-right:10px; }
     min-width:150px;
 }
 
+select option:disabled {
+    color:#555;
+}
+
 button {
     background:red;
     color:white;
@@ -52,7 +56,6 @@ button {
     padding:8px 12px;
     cursor:pointer;
     border-radius:6px;
-    margin-right:5px;
 }
 
 .kpis { display:flex; gap:15px; }
@@ -68,8 +71,6 @@ button {
 
 canvas { max-height:300px; }
 
-.search-box { margin-bottom:10px; }
-
 .search-box input {
     width:100%;
     padding:8px;
@@ -82,8 +83,6 @@ canvas { max-height:300px; }
 .table-container {
     max-height:400px;
     overflow:auto;
-    border:1px solid #222;
-    border-radius:8px;
 }
 
 table { width:100%; border-collapse: collapse; font-size:12px; }
@@ -91,11 +90,8 @@ table { width:100%; border-collapse: collapse; font-size:12px; }
 th {
     position:sticky;
     top:0;
-    background: linear-gradient(90deg, #8b0000, #cc0000);
-    color:white;
+    background:#900;
     padding:8px;
-    text-transform:uppercase;
-    font-size:11px;
     cursor:pointer;
 }
 
@@ -130,26 +126,19 @@ tr:hover { background:#1a1a1a; }
     <button onclick="limparFiltros()">Limpar Filtros</button>
 </div>
 
-<div class="card">
-    <canvas id="graficoTotal"></canvas>
-</div>
-
-<div class="card">
-    <canvas id="graficoFiltrado"></canvas>
-</div>
+<div class="card"><canvas id="graficoTotal"></canvas></div>
+<div class="card"><canvas id="graficoFiltrado"></canvas></div>
 
 <div class="card">
 
 <div class="search-box">
-    <input type="text" id="search" placeholder="Buscar na tabela..." onkeyup="buscar()">
+<input type="text" id="search" placeholder="Buscar..." onkeyup="buscar()">
 </div>
 
-<div style="margin-bottom:10px;">
-    <button onclick="exportarExcel()">Exportar Excel</button>
-</div>
+<button onclick="exportarExcel()">Exportar Excel</button>
 
 <div class="table-container">
-    <table id="tabela"></table>
+<table id="tabela"></table>
 </div>
 
 </div>
@@ -176,12 +165,13 @@ document.getElementById('fileInput').addEventListener('change', e => {
     });
 });
 
+/* ================= FILTROS ================= */
+
 function criarFiltros(){
     let div = document.getElementById('filtros');
     div.innerHTML = "";
 
     Object.keys(dados[0]).forEach(col => {
-
         let box = document.createElement("div");
         box.className = "filter-box";
 
@@ -192,21 +182,14 @@ function criarFiltros(){
         select.multiple = true;
         select.id = "f_" + col;
 
-        let valores = [...new Set(dados.map(d => d[col]).filter(v => v))];
-
-        valores.forEach(v => {
-            let opt = document.createElement("option");
-            opt.value = v;
-            opt.text = v;
-            select.appendChild(opt);
-        });
-
         select.addEventListener("change", filtrar);
 
         box.appendChild(label);
         box.appendChild(select);
         div.appendChild(box);
     });
+
+    atualizarFiltros();
 }
 
 function filtrar(){
@@ -218,17 +201,67 @@ function filtrar(){
         });
     });
 
+    atualizarFiltros();
     dadosBusca = [...filtrados];
     atualizar();
+}
+
+function atualizarFiltros(){
+    Object.keys(dados[0]).forEach(col => {
+
+        let select = document.getElementById("f_" + col);
+        let selecionados = Array.from(select.selectedOptions).map(o => o.value);
+
+        let base = dados.filter(linha => {
+            return Object.keys(linha).every(c => {
+                if(c === col) return true;
+
+                let sel = document.getElementById("f_" + c);
+                let vals = Array.from(sel.selectedOptions).map(o => o.value);
+
+                return vals.length === 0 || vals.includes(linha[c]);
+            });
+        });
+
+        let contagem = {};
+        base.forEach(l => {
+            let v = l[col];
+            if(v) contagem[v] = (contagem[v]||0)+1;
+        });
+
+        let todosValores = [...new Set(dados.map(d => d[col]).filter(v => v))];
+
+        select.innerHTML = "";
+
+        todosValores.forEach(v => {
+            let opt = document.createElement("option");
+            let count = contagem[v] || 0;
+
+            opt.value = v;
+            opt.text = `${v} (${count})`;
+
+            if(count === 0){
+                opt.disabled = true;
+            }
+
+            if(selecionados.includes(v)){
+                opt.selected = true;
+            }
+
+            select.appendChild(opt);
+        });
+    });
 }
 
 function limparFiltros(){
     document.querySelectorAll("select").forEach(s => s.selectedIndex = -1);
     filtrados = [...dados];
     dadosBusca = [...dados];
-    criarFiltros();
+    atualizarFiltros();
     atualizar();
 }
+
+/* ================= BUSCA ================= */
 
 function buscar(){
     let termo = document.getElementById('search').value.toLowerCase();
@@ -242,6 +275,8 @@ function buscar(){
     tabela();
 }
 
+/* ================= TABELA ================= */
+
 function ordenar(col){
     dadosBusca.sort((a,b)=>{
         return ordemAsc
@@ -251,14 +286,6 @@ function ordenar(col){
 
     ordemAsc = !ordemAsc;
     tabela();
-}
-
-function atualizar(){
-    total.innerText = dados.length;
-    filtradas.innerText = filtrados.length;
-    tabela();
-    graficoTotalFunc();
-    graficoFiltradoFunc();
 }
 
 function tabela(){
@@ -280,19 +307,24 @@ function tabela(){
     });
 }
 
-/* ===== EXPORT ===== */
+/* ================= EXPORT ================= */
 
 function exportarExcel(){
-    if(dadosBusca.length === 0) return alert("Sem dados");
-
     let ws = XLSX.utils.json_to_sheet(dadosBusca);
     let wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Dados");
-
     XLSX.writeFile(wb, "dados_filtrados.xlsx");
 }
 
-/* ================= */
+/* ================= DASHBOARD ================= */
+
+function atualizar(){
+    total.innerText = dados.length;
+    filtradas.innerText = filtrados.length;
+    tabela();
+    graficoTotalFunc();
+    graficoFiltradoFunc();
+}
 
 let chartTotal, chartFiltrado;
 
@@ -315,10 +347,9 @@ function graficoTotalFunc(){
             labels:Object.keys(cont),
             datasets:[{
                 data:Object.values(cont),
-                backgroundColor:'rgba(255,0,0,0.85)'
+                backgroundColor:'red'
             }]
-        },
-        options:{ indexAxis:'y', plugins:{ legend:{display:false} } }
+        }
     });
 }
 
@@ -333,10 +364,9 @@ function graficoFiltradoFunc(){
             labels:Object.keys(cont),
             datasets:[{
                 data:Object.values(cont),
-                backgroundColor:'rgba(255,0,0,0.85)'
+                backgroundColor:'red'
             }]
-        },
-        options:{ indexAxis:'y', plugins:{ legend:{display:false} } }
+        }
     });
 }
 

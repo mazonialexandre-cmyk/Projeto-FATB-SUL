@@ -1,397 +1,309 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Dashboard Gerencial</title>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
-<style>
-body { font-family: 'Segoe UI', Arial; background:#0b0b0b; color:white; margin:0; }
-
-header {
-    background:black;
-    padding:15px;
-    display:flex;
-    align-items:center;
-    border-bottom:3px solid red;
-}
-
-header img { height:45px; margin-right:10px; }
-
-.container { padding:20px; }
-
-.card {
-    background:#111;
-    padding:15px;
-    margin-bottom:20px;
-    border-radius:12px;
-}
-
-.filters { display:flex; flex-wrap:wrap; gap:15px; }
-
-.filter-box { display:flex; flex-direction:column; }
-
-.filter-box label { font-size:12px; color:#aaa; }
-
-.filter-box select {
-    padding:6px;
-    background:#1a1a1a;
-    color:white;
-    border:1px solid #333;
-    border-radius:6px;
-    min-width:150px;
-}
-
-button {
-    background:red;
-    color:white;
-    border:none;
-    padding:8px 12px;
-    cursor:pointer;
-    border-radius:6px;
-    margin-right:5px;
-}
-
-.kpis { display:flex; gap:15px; }
-
-.kpi {
-    flex:1;
-    background:#1a1a1a;
-    padding:15px;
-    border-left:4px solid red;
-}
-
-.kpi span { font-size:20px; font-weight:bold; }
-
-canvas { max-height:300px; }
-
-.search-box { margin-bottom:10px; }
-
-.search-box input {
-    width:100%;
-    padding:8px;
-    background:#1a1a1a;
-    border:1px solid #333;
-    color:white;
-    border-radius:6px;
-}
-
-.table-container {
-    max-height:400px;
-    overflow:auto;
-    border:1px solid #222;
-    border-radius:8px;
-}
-
-table { width:100%; border-collapse: collapse; font-size:12px; }
-
-th {
-    position:sticky;
-    top:0;
-    background: linear-gradient(90deg, #8b0000, #cc0000);
-    color:white;
-    padding:8px;
-    text-transform:uppercase;
-    font-size:11px;
-    cursor:pointer;
-}
-
-td { padding:6px; border-bottom:1px solid #222; }
-
-tr:hover { background:#1a1a1a; }
-
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard with Cascading Filters</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            background: #1a1a1a;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #ff4444;
+        }
+        #fileInput {
+            background: #333;
+            color: #fff;
+            border: 1px solid #666;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        #filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        #filters > div {
+            display: flex;
+            flex-direction: column;
+        }
+        label {
+            color: #ff4444;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        select {
+            background: #333;
+            color: #fff;
+            border: 1px solid #666;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        #chart {
+            background: #222;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        #table {
+            overflow-x: auto;
+        }
+        #table table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #222;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th, td {
+            border: 1px solid #444;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background: #333;
+            color: #ff4444;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background: #2a2a2a;
+        }
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+    </style>
 </head>
-
 <body>
+    <div class="container">
+        <h1>Dashboard com Filtros Automáticos</h1>
+        <input type="file" id="fileInput" accept=".csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
+        <div id="filters"></div>
+        <canvas id="chart" width="800" height="400"></canvas>
+        <div id="table"></div>
+    </div>
 
-<header>
-    <img src="logo.png">
-    <h2>Dashboard Gerencial</h2>
-</header>
+    <script>
+        let data = [];
+        let filteredData = [];
+        let filters = {};
+        let chart = null;
 
-<div class="container">
+        document.getElementById('fileInput').addEventListener('change', handleFile);
 
-<div class="card">
-    <input type="file" id="fileInput">
-</div>
+        function handleFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
 
-<div class="card kpis">
-    <div class="kpi">Total<br><span id="total"></span></div>
-    <div class="kpi">Filtradas<br><span id="filtradas"></span></div>
-</div>
-
-<div class="card">
-    <div id="filtros" class="filters"></div>
-    <br>
-    <button onclick="limparFiltros()">Limpar Filtros</button>
-</div>
-
-<div class="card">
-    <canvas id="graficoTotal"></canvas>
-</div>
-
-<div class="card">
-    <canvas id="graficoFiltrado"></canvas>
-</div>
-
-<div class="card">
-
-<div class="search-box">
-    <input type="text" id="search" placeholder="Buscar na tabela..." onkeyup="buscar()">
-</div>
-
-<div style="margin-bottom:10px;">
-    <button onclick="exportarExcel()">Exportar Excel</button>
-    <button onclick="gerarLink()">Compartilhar Link</button>
-</div>
-
-<div class="table-container">
-    <table id="tabela"></table>
-</div>
-
-</div>
-
-</div>
-
-<script>
-
-let dados = [];
-let filtrados = [];
-let dadosBusca = [];
-let ordemAsc = true;
-
-document.getElementById('fileInput').addEventListener('change', e => {
-    Papa.parse(e.target.files[0], {
-        header:true,
-        complete: res => {
-            dados = res.data.filter(d => Object.keys(d).length > 1);
-            filtrados = [...dados];
-            dadosBusca = [...dados];
-
-            aplicarURL(); // 🔥 lê parâmetros da URL
-
-            criarFiltros();
-            atualizar();
-        }
-    });
-});
-
-function criarFiltros(){
-    let div = document.getElementById('filtros');
-    div.innerHTML = "";
-
-    Object.keys(dados[0]).forEach(col => {
-
-        let box = document.createElement("div");
-        box.className = "filter-box";
-
-        let label = document.createElement("label");
-        label.innerText = col;
-
-        let select = document.createElement("select");
-        select.multiple = true;
-        select.id = "f_" + col;
-
-        let valores = [...new Set(dados.map(d => d[col]).filter(v => v))];
-
-        valores.forEach(v => {
-            let opt = document.createElement("option");
-            opt.value = v;
-            opt.text = v;
-            select.appendChild(opt);
-        });
-
-        select.addEventListener("change", filtrar);
-
-        box.appendChild(label);
-        box.appendChild(select);
-        div.appendChild(box);
-    });
-}
-
-function filtrar(){
-    filtrados = dados.filter(linha => {
-        return Object.keys(linha).every(col => {
-            let sel = document.getElementById("f_" + col);
-            let valores = Array.from(sel.selectedOptions).map(o => o.value);
-            return valores.length === 0 || valores.includes(linha[col]);
-        });
-    });
-
-    dadosBusca = [...filtrados];
-    atualizar();
-}
-
-function limparFiltros(){
-    document.querySelectorAll("select").forEach(s => s.selectedIndex = -1);
-    filtrados = [...dados];
-    dadosBusca = [...dados];
-    criarFiltros();
-    atualizar();
-}
-
-function buscar(){
-    let termo = document.getElementById('search').value.toLowerCase();
-
-    dadosBusca = filtrados.filter(l =>
-        Object.values(l).some(v =>
-            v && v.toLowerCase().includes(termo)
-        )
-    );
-
-    tabela();
-}
-
-function ordenar(col){
-    dadosBusca.sort((a,b)=>{
-        return ordemAsc
-            ? (a[col] > b[col] ? 1 : -1)
-            : (a[col] < b[col] ? 1 : -1);
-    });
-
-    ordemAsc = !ordemAsc;
-    tabela();
-}
-
-function atualizar(){
-    total.innerText = dados.length;
-    filtradas.innerText = filtrados.length;
-    tabela();
-    graficoTotalFunc();
-    graficoFiltradoFunc();
-}
-
-function tabela(){
-    let t = document.getElementById('tabela');
-    t.innerHTML="";
-
-    if(dadosBusca.length === 0) return;
-
-    let head="<tr>";
-    Object.keys(dadosBusca[0]).forEach(k=>head+=`<th onclick="ordenar('${k}')">${k}</th>`);
-    head+="</tr>";
-    t.innerHTML+=head;
-
-    dadosBusca.forEach(l=>{
-        let row="<tr>";
-        Object.values(l).forEach(v=>row+=`<td>${v}</td>`);
-        row+="</tr>";
-        t.innerHTML+=row;
-    });
-}
-
-/* ===== EXPORT ===== */
-
-function exportarExcel(){
-    let ws = XLSX.utils.json_to_sheet(dadosBusca);
-    let wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Dados");
-    XLSX.writeFile(wb, "dados_filtrados.xlsx");
-}
-
-/* ===== LINK ===== */
-
-function gerarLink(){
-    let params = new URLSearchParams();
-
-    Object.keys(dados[0]).forEach(col => {
-        let sel = document.getElementById("f_" + col);
-        let valores = Array.from(sel.selectedOptions).map(o => o.value);
-
-        if(valores.length > 0){
-            params.set(col, valores.join("|"));
-        }
-    });
-
-    let busca = document.getElementById("search").value;
-    if(busca) params.set("busca", busca);
-
-    let url = window.location.origin + window.location.pathname + "?" + params.toString();
-
-    navigator.clipboard.writeText(url);
-    alert("Link copiado!");
-}
-
-function aplicarURL(){
-    let params = new URLSearchParams(window.location.search);
-
-    setTimeout(() => {
-        Object.keys(dados[0]).forEach(col => {
-            let val = params.get(col);
-            if(val){
-                let valores = val.split("|");
-                let select = document.getElementById("f_" + col);
-
-                Array.from(select.options).forEach(o => {
-                    if(valores.includes(o.value)) o.selected = true;
-                });
+            const reader = new FileReader();
+            if (file.name.match(/\.csv$/i)) {
+                reader.readAsText(file);
+                reader.onload = function(e) {
+                    Papa.parse(e.target.result, {
+                        header: true,
+                        skipEmptyLines: true,
+                        complete: function(results) {
+                            data = results.data.filter(row => Object.values(row).some(v => v !== '' && v != null));
+                            filteredData = [...data];
+                            initDashboard();
+                        }
+                    });
+                };
+            } else {
+                reader.readAsArrayBuffer(file);
+                reader.onload = function(e) {
+                    const ab = new Uint8Array(e.target.result);
+                    const wb = XLSX.read(ab, { type: 'array' });
+                    const wsname = wb.SheetNames[0];
+                    const ws = wb.Sheets[wsname];
+                    const json = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+                    if (json.length > 0) {
+                        const headers = json[0];
+                        data = json.slice(1).map(row => {
+                            const obj = {};
+                            headers.forEach((h, i) => {
+                                obj[h] = row[i];
+                            });
+                            return obj;
+                        }).filter(row => Object.values(row).some(v => v !== '' && v != null));
+                        filteredData = [...data];
+                        initDashboard();
+                    }
+                };
             }
-        });
-
-        let busca = params.get("busca");
-        if(busca){
-            document.getElementById("search").value = busca;
         }
 
-        filtrar();
-        buscar();
+        function initDashboard() {
+            filters = {};
+            criarFiltros();
+            updateChart();
+            updateTable();
+        }
 
-    }, 300);
-}
+        function criarFiltros() {
+            const container = document.getElementById('filters');
+            container.innerHTML = '';
+            if (filteredData.length === 0 || Object.keys(filteredData[0] || {}).length === 0) {
+                return;
+            }
+            const columns = Object.keys(filteredData[0]);
+            columns.forEach(col => {
+                const div = document.createElement('div');
+                div.style.minWidth = '200px';
+                div.innerHTML = `
+                    <label>${col}:</label>
+                    <select id="filter_${col}">
+                        <option value="">Todos</option>
+                    </select>
+                `;
+                container.appendChild(div);
+                const select = document.getElementById(`filter_${col}`);
+                const uniqueValues = [...new Set(filteredData.map(row => row[col]).filter(v => v !== '' && v != null))].sort();
+                uniqueValues.forEach(val => {
+                    const option = document.createElement('option');
+                    option.value = val;
+                    option.textContent = val;
+                    select.appendChild(option);
+                });
+                if (filters[col]) {
+                    select.value = filters[col];
+                }
+                select.addEventListener('change', onFilterChange);
+            });
+        }
 
-/* ================= */
+        function onFilterChange(event) {
+            const col = event.target.id.replace('filter_', '');
+            filters[col] = event.target.value || null;
+            applyFilters();
+        }
 
-let chartTotal, chartFiltrado;
+        function applyFilters() {
+            filteredData = data.filter(row => {
+                return Object.entries(filters).every(([col, value]) => !value || row[col] === value);
+            });
+            criarFiltros();
+            updateChart();
+            updateTable();
+        }
 
-function contar(base){
-    let cont = {};
-    base.forEach(d=>{
-        cont[d.status] = (cont[d.status]||0)+1;
-    });
-    return cont;
-}
+        function updateChart() {
+            const canvas = document.getElementById('chart');
+            const ctx = canvas.getContext('2d');
+            if (filteredData.length === 0) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#444';
+                ctx.textAlign = 'center';
+                ctx.fillText('No data to display', canvas.width / 2, canvas.height / 2);
+                if (chart) {
+                    chart.destroy();
+                    chart = null;
+                }
+                return;
+            }
+            if (Object.keys(filteredData[0] || {}).length === 0) return;
 
-function graficoTotalFunc(){
-    let cont = contar(dados);
+            const cols = Object.keys(filteredData[0]);
+            const labelCol = cols.find(c => typeof filteredData[0][c] === 'string' || filteredData[0][c] === '') || cols[0];
+            const numCols = cols.filter(c => {
+                const val = filteredData[0][c];
+                return !isNaN(parseFloat(val)) && isFinite(val) && val !== '';
+            });
+            const numCol = numCols[0] || cols[cols.length - 1];
 
-    if(chartTotal) chartTotal.destroy();
+            const agg = {};
+            filteredData.forEach(row => {
+                const label = row[labelCol] || 'Unknown';
+                const val = parseFloat(row[numCol]) || 0;
+                agg[label] = (agg[label] || 0) + val;
+            });
 
-    chartTotal = new Chart(graficoTotal, {
-        type:'bar',
-        data:{
-            labels:Object.keys(cont),
-            datasets:[{
-                data:Object.values(cont),
-                backgroundColor:'rgba(255,0,0,0.85)'
-            }]
-        },
-        options:{ indexAxis:'y', plugins:{ legend:{display:false} } }
-    });
-}
+            const labels = Object.keys(agg);
+            const values = Object.values(agg);
 
-function graficoFiltradoFunc(){
-    let cont = contar(filtrados);
+            if (chart) {
+                chart.destroy();
+            }
 
-    if(chartFiltrado) chartFiltrado.destroy();
+            chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: `Total ${numCol}`,
+                        data: values,
+                        backgroundColor: 'rgba(255, 68, 68, 0.8)',
+                        borderColor: '#ff4444',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { color: '#fff' },
+                            grid: { color: '#444' }
+                        },
+                        x: {
+                            ticks: { color: '#fff' },
+                            grid: { color: '#444' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#fff' } }
+                    }
+                }
+            });
+        }
 
-    chartFiltrado = new Chart(graficoFiltrado, {
-        type:'bar',
-        data:{
-            labels:Object.keys(cont),
-            datasets:[{
-                data:Object.values(cont),
-                backgroundColor:'rgba(255,0,0,0.85)'
-            }]
-        },
-        options:{ indexAxis:'y', plugins:{ legend:{display:false} } }
-    });
-}
+        function updateTable() {
+            const tableDiv = document.getElementById('table');
+            if (filteredData.length === 0) {
+                tableDiv.innerHTML = '<div class="no-data">No data matches the filters</div>';
+                return;
+            }
+            if (Object.keys(filteredData[0] || {}).length === 0) {
+                tableDiv.innerHTML = '<div class="no-data">No data</div>';
+                return;
+            }
 
-</script>
+            const cols = Object.keys(filteredData[0]);
+            let html = '<table><thead><tr>';
+            cols.forEach(col => {
+                html += `<th>${col}</th>`;
+            });
+            html += '</tr></thead><tbody>';
 
+            filteredData.slice(0, 100).forEach(row => {
+                html += '<tr>';
+                cols.forEach(col => {
+                    html += `<td>${row[col] || ''}</td>`;
+                });
+                html += '</tr';
+            });
+
+            if (filteredData.length > 100) {
+                html += '<tr><td colspan="' + cols.length + '" style="text-align:center;">... and ' + (filteredData.length - 100) + ' more rows</td></tr>';
+            }
+
+            html += '</tbody></table>';
+            tableDiv.innerHTML = html;
+        }
+    </script>
 </body>
 </html>

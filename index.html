@@ -5,358 +5,451 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Gerencial</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         * {
             box-sizing: border-box;
         }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f5f5;
             margin: 0;
-            padding: 0;
+            font-family: Arial, sans-serif;
+            background: #f0f2f5;
         }
-        .dashboard {
-            padding: 1rem;
-            max-width: 1400px;
-            margin: 0 auto;
+        #toggleSidebar {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 1001;
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px;
+            font-size: 18px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: none;
         }
-        h1 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 2rem;
+        #sidebar {
+            width: 300px;
+            background: #f8f9fa;
+            padding: 20px;
+            height: 100vh;
+            overflow-y: auto;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+            transform: translateX(0);
         }
-        .filters-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 1rem;
-            margin-bottom: 2rem;
-            justify-content: flex-start;
+        .main-content {
+            margin-left: 300px;
+            padding: 20px;
+            flex: 1;
+            min-height: 100vh;
         }
         .filter-group {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            flex: 1 1 250px;
-            min-width: 250px;
+            margin-bottom: 15px;
         }
-        label {
-            font-weight: 600;
-            color: #555;
-            font-size: 0.9rem;
+        .filter-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
         }
-        input[type="file"] {
-            padding: 0.5rem;
+        .filter-group input,
+        .filter-group select {
+            width: 100%;
+            padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
-            background: white;
         }
-        .multi {
-            min-height: 180px;
-            max-height: 250px;
-            overflow-y: auto;
-            padding: 0.5rem;
-            border: 1px solid #ccc;
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
             border-radius: 4px;
-            background: white;
-            font-size: 0.9rem;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 5px;
         }
-        .multi option {
-            padding: 0.25rem;
+        button:hover {
+            background: #0056b3;
         }
-        .charts-grid {
+        #exportPDF {
+            position: sticky;
+            top: 20px;
+            background: #28a745;
+            width: auto;
+            padding: 10px 20px;
+            margin-bottom: 20px;
+        }
+        #exportPDF:hover {
+            background: #218838;
+        }
+        .cards-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-            margin-bottom: 2rem;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 20px;
         }
         .card {
             background: white;
-            padding: 1.5rem;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
         }
-        .card h3 {
-            margin-top: 0;
-            color: #333;
-            margin-bottom: 1rem;
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: #f8f9fa;
+        }
+        .card-header h4 {
+            margin: 0;
+        }
+        .expand-btn {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 5px;
+        }
+        .expand-btn:hover {
+            background: rgba(0,123,255,0.1);
+            border-radius: 4px;
         }
         canvas {
             width: 100% !important;
             height: 300px !important;
         }
-        .table-container {
-            overflow-x: auto;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            border: 1px solid #eee;
-        }
-        #dataTable {
-            width: 100%;
-            min-width: 800px;
-            border-collapse: collapse;
-            margin: 0;
-        }
-        #dataTable th,
-        #dataTable td {
-            padding: 0.75rem 1rem;
-            border-bottom: 1px solid #eee;
-            text-align: left;
-            white-space: nowrap;
-        }
-        #dataTable th {
-            background: #f8f9fa;
-            font-weight: 600;
-            color: #495057;
-            position: sticky;
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
             top: 0;
-            z-index: 10;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
         }
-        #dataTable tr:hover {
-            background: #f8f9fa;
+        .modal-content {
+            position: relative;
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 900px;
+            max-height: 80vh;
+            overflow: auto;
         }
-        .no-data {
-            text-align: center;
-            padding: 2rem;
-            color: #666;
+        .close {
+            position: absolute;
+            right: 20px;
+            top: 15px;
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover {
+            color: black;
+        }
+        #modalChart {
+            height: 500px !important;
         }
         @media (max-width: 1024px) {
-            .filters-container {
-                flex-direction: column;
+            #toggleSidebar {
+                display: block;
             }
-            .filter-group {
-                flex: none;
-                width: 100%;
-                min-width: unset;
+            #sidebar {
+                position: fixed;
+                z-index: 1000;
+                transform: translateX(-100%);
             }
-            .multi {
-                min-height: 140px;
+            body.sidebar-open #sidebar {
+                transform: translateX(0);
             }
-            .charts-grid {
-                grid-template-columns: 1fr;
+            body.sidebar-open .main-content {
+                margin-left: 300px;
+            }
+            .main-content {
+                margin-left: 0;
             }
         }
-        @media (max-width: 768px) {
-            .dashboard {
-                padding: 0.5rem;
+        @media (min-width: 1025px) {
+            body.sidebar-open #sidebar,
+            #sidebar {
+                transform: translateX(0) !important;
             }
-            canvas {
-                height: 250px !important;
-            }
-            .multi {
-                min-height: 120px;
-            }
-            #dataTable th,
-            #dataTable td {
-                padding: 0.5rem 0.75rem;
-                font-size: 0.85rem;
+            #toggleSidebar {
+                display: none !important;
             }
         }
     </style>
 </head>
 <body>
-    <div class="dashboard">
-        <h1>Dashboard Gerencial</h1>
-        <div class="filters-container">
-            <div class="filter-group">
-                <label for="fileInput">Upload CSV ou XLSX:</label>
-                <input type="file" id="fileInput" accept=".csv,.xlsx">
-            </div>
-            <div id="dynamicFilters"></div>
+    <button id="toggleSidebar">☰</button>
+    <div id="sidebar">
+        <h3>Filtros</h3>
+        <div class="filter-group">
+            <label for="csvFile">Arquivo CSV:</label>
+            <input type="file" id="csvFile" accept=".csv">
         </div>
-        <div class="charts-grid">
+        <div class="filter-group">
+            <label for="startDate">Data Inicial:</label>
+            <input type="date" id="startDate">
+        </div>
+        <div class="filter-group">
+            <label for="endDate">Data Final:</label>
+            <input type="date" id="endDate">
+        </div>
+        <div class="filter-group">
+            <label for="categoryFilter">Categoria:</label>
+            <select id="categoryFilter">
+                <option value="Todas">Todas</option>
+            </select>
+        </div>
+        <button id="applyFilters">Aplicar Filtros</button>
+    </div>
+    <div class="main-content">
+        <button id="exportPDF">Exportar PDF</button>
+        <div class="cards-grid">
             <div class="card">
-                <h3>Vendas por Região</h3>
-                <canvas id="pieChart"></canvas>
+                <div class="card-header">
+                    <h4>Vendas ao Longo do Tempo</h4>
+                    <button class="expand-btn" data-type="line" data-title="Vendas ao Longo do Tempo" title="Expandir">📈</button>
+                </div>
+                <canvas id="salesChart"></canvas>
             </div>
             <div class="card">
-                <h3>Vendas por Produto</h3>
+                <div class="card-header">
+                    <h4>Usuários por Categoria</h4>
+                    <button class="expand-btn" data-type="bar" data-title="Usuários por Categoria" title="Expandir">📊</button>
+                </div>
                 <canvas id="barChart"></canvas>
             </div>
+            <div class="card">
+                <div class="card-header">
+                    <h4>Vendas por Categoria</h4>
+                    <button class="expand-btn" data-type="doughnut" data-title="Vendas por Categoria" title="Expandir">🛍️</button>
+                </div>
+                <canvas id="doughnutChart"></canvas>
+            </div>
         </div>
-        <div class="table-container">
-            <table id="dataTable"></table>
+    </div>
+    <div id="chartModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h3 id="modalTitle"></h3>
+            <canvas id="modalChart"></canvas>
         </div>
     </div>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const fileInput = document.getElementById('fileInput');
-            const dynamicFilters = document.getElementById('dynamicFilters');
-            const dataTable = document.getElementById('dataTable');
-            const pieCtx = document.getElementById('pieChart').getContext('2d');
-            const barCtx = document.getElementById('barChart').getContext('2d');
+        const { jsPDF } = window.jspdf;
+        let rawData = [];
+        let salesChart, barChart, doughnutChart, currentModalChart;
+        const chartTitles = {
+            line: 'Vendas ao Longo do Tempo',
+            bar: 'Usuários por Categoria',
+            doughnut: 'Vendas por Categoria'
+        };
 
-            let data = [];
-            let pieChart = null;
-            let barChart = null;
-            const filterColumns = ['Region', 'Product'];
+        function generateSampleData() {
+            return [
+                {date: '2024-01-01', category: 'Electronics', sales: 100, users: 10},
+                {date: '2024-01-01', category: 'Clothing', sales: 80, users: 15},
+                {date: '2024-01-02', category: 'Electronics', sales: 120, users: 12},
+                {date: '2024-01-02', category: 'Books', sales: 60, users: 8},
+                {date: '2024-01-03', category: 'Clothing', sales: 90, users: 20},
+                {date: '2024-01-03', category: 'Sports', sales: 110, users: 18},
+                {date: '2024-01-04', category: 'Electronics', sales: 130, users: 14},
+                {date: '2024-01-04', category: 'Books', sales: 70, users: 9},
+                {date: '2024-01-05', category: 'Sports', sales: 95, users: 22},
+                {date: '2024-01-05', category: 'Clothing', sales: 85, users: 16},
+                {date: '2024-01-06', category: 'Electronics', sales: 140, users: 13},
+                {date: '2024-01-06', category: 'Books', sales: 65, users: 11}
+            ];
+        }
 
-            function handleFile(e) {
-                const file = e.target.files[0];
-                if (!file) return;
+        function getFilteredData() {
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+            const cat = document.getElementById('categoryFilter').value;
+            const startD = start ? new Date(start) : new Date('1970-01-01');
+            const endD = end ? new Date(end) : new Date('2099-12-31');
+            return rawData.filter(row => {
+                const rowDate = new Date(row.date);
+                return rowDate >= startD && rowDate <= endD && (cat === 'Todas' || row.category === cat);
+            });
+        }
 
-                const reader = new FileReader();
-                reader.onload = function(ev) {
-                    let parsedData;
-                    const fileName = file.name.toLowerCase();
-                    if (fileName.endsWith('.csv')) {
-                        parsedData = Papa.parse(ev.target.result, {
-                            header: true,
-                            skipEmptyLines: true,
-                            dynamicTyping: true
-                        }).data;
-                    } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
-                        const arrayBuffer = ev.target.result;
-                        const uint8Array = new Uint8Array(arrayBuffer);
-                        const workbook = XLSX.read(uint8Array, { type: 'array' });
-                        const firstSheetName = workbook.SheetNames[0];
-                        const worksheet = workbook.Sheets[firstSheetName];
-                        parsedData = XLSX.utils.sheet_to_json(worksheet);
-                    } else {
-                        alert('Tipo de arquivo não suportado. Use CSV ou XLSX.');
-                        return;
-                    }
-                    processData(parsedData);
+        function prepareChartData(type, fd) {
+            if (type === 'line') {
+                const dates = [...new Set(fd.map(r => r.date))].sort();
+                const sales = dates.map(date => 
+                    fd.filter(r => r.date === date).reduce((sum, r) => sum + parseFloat(r.sales || 0), 0)
+                );
+                return {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Vendas',
+                        data: sales,
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        tension: 0.1
+                    }]
                 };
+            } else if (type === 'bar') {
+                const cats = [...new Set(fd.map(r => r.category))];
+                const users = cats.map(cat => 
+                    fd.filter(r => r.category === cat).reduce((sum, r) => sum + parseFloat(r.users || 0), 0)
+                );
+                return {
+                    labels: cats,
+                    datasets: [{
+                        label: 'Usuários',
+                        data: users,
+                        backgroundColor: 'rgb(53, 162, 235)'
+                    }]
+                };
+            } else if (type === 'doughnut') {
+                const cats = [...new Set(fd.map(r => r.category))];
+                const sales = cats.map(cat => 
+                    fd.filter(r => r.category === cat).reduce((sum, r) => sum + parseFloat(r.sales || 0), 0)
+                );
+                return {
+                    labels: cats,
+                    datasets: [{
+                        data: sales,
+                        backgroundColor: [
+                            'rgb(255, 99, 132)',
+                            'rgb(54, 162, 235)',
+                            'rgb(255, 205, 86)',
+                            'rgb(75, 192, 192)',
+                            'rgb(153, 102, 255)'
+                        ]
+                    }]
+                };
+            }
+        }
 
-                if (file.name.toLowerCase().endsWith('.csv')) {
-                    reader.readAsText(file);
-                } else {
-                    reader.readAsArrayBuffer(file);
+        function createChart(canvasId, type, fd, title = '') {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            const chartData = prepareChartData(type, fd);
+            return new Chart(ctx, {
+                type,
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: title
+                        }
+                    }
                 }
-            }
+            });
+        }
 
-            function processData(rawData) {
-                data = rawData.filter(row => Object.values(row).some(val => val !== null && val !== ''));
-                dynamicFilters.innerHTML = filterColumns.map(col => `
-                    <div class="filter-group">
-                        <label>${col}:</label>
-                        <select multiple class="multi" id="${col}Select"></select>
-                    </div>
-                `).join('');
+        function updateCharts() {
+            const fd = getFilteredData();
+            if (salesChart) salesChart.destroy();
+            salesChart = createChart('salesChart', 'line', fd, chartTitles.line);
+            if (barChart) barChart.destroy();
+            barChart = createChart('barChart', 'bar', fd, chartTitles.bar);
+            if (doughnutChart) doughnutChart.destroy();
+            doughnutChart = createChart('doughnutChart', 'doughnut', fd, chartTitles.doughnut);
+        }
 
-                filterColumns.forEach(col => {
-                    const select = document.getElementById(col + 'Select');
-                    const counts = {};
-                    data.forEach(row => {
-                        const val = row[col];
-                        if (val !== null && val !== undefined && val !== '') {
-                            counts[val] = (counts[val] || 0) + 1;
-                        }
-                    });
-                    Object.entries(counts)
-                        .sort(([,a], [,b]) => b - a)
-                        .forEach(([val, count]) => {
-                            const option = new Option(`${val} (${count})`, val);
-                            select.add(option);
-                        });
-                    select.addEventListener('change', updateFilters);
-                });
+        function updateCategoryFilter() {
+            const cats = [...new Set(rawData.map(r => r.category))];
+            const select = document.getElementById('categoryFilter');
+            select.innerHTML = '<option value="Todas">Todas</option>' + 
+                cats.map(c => `<option value="${c}">${c}</option>`).join('');
+        }
 
-                updateFilters();
-            }
+        document.addEventListener('DOMContentLoaded', () => {
+            rawData = generateSampleData();
+            document.getElementById('startDate').value = '2024-01-01';
+            updateCategoryFilter();
+            updateCharts();
 
-            function updateFilters() {
-                let filtered = data;
-                filterColumns.forEach(col => {
-                    const select = document.getElementById(col + 'Select');
-                    if (!select) return;
-                    const selected = Array.from(select.selectedOptions).map(option => option.value);
-                    if (selected.length > 0) {
-                        filtered = filtered.filter(row => selected.includes(row[col]));
+            document.getElementById('csvFile').addEventListener('change', (e) => {
+                Papa.parse(e.target.files[0], {
+                    header: true,
+                    complete: (results) => {
+                        rawData = results.data.filter(row => row.date && row.category);
+                        updateCategoryFilter();
+                        updateCharts();
                     }
                 });
-                updateTable(filtered);
-                updateCharts(filtered);
-            }
+            });
 
-            function updateTable(filteredData) {
-                if (!filteredData.length) {
-                    dataTable.innerHTML = '<tr><td colspan="100" class="no-data">Nenhum dado para exibir</td></tr>';
-                    return;
+            document.getElementById('applyFilters').addEventListener('click', updateCharts);
+
+            document.querySelectorAll('.expand-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const type = btn.dataset.type;
+                    const title = btn.dataset.title;
+                    document.getElementById('modalTitle').textContent = title;
+                    const canvas = document.getElementById('modalChart');
+                    if (currentModalChart) currentModalChart.destroy();
+                    currentModalChart = createChart('modalChart', type, getFilteredData(), title);
+                    document.getElementById('chartModal').style.display = 'block';
+                });
+            });
+
+            const modal = document.getElementById('chartModal');
+            const closeBtn = document.querySelector('.close');
+            closeBtn.onclick = () => {
+                modal.style.display = 'none';
+                if (currentModalChart) {
+                    currentModalChart.destroy();
+                    currentModalChart = null;
                 }
-                const headers = Object.keys(filteredData[0]);
-                let html = `<thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>`;
-                filteredData.slice(0, 200).forEach(row => {
-                    html += `<tr>${headers.map(h => `<td>${row[h] || ''}</td>`).join('')}</tr>`;
-                });
-                html += '</tbody>';
-                dataTable.innerHTML = html;
-            }
+            };
+            modal.onclick = (e) => {
+                if (e.target === modal) {
+                    closeBtn.click();
+                }
+            };
 
-            function updateCharts(filteredData) {
-                if (!filteredData.length) return;
+            document.getElementById('toggleSidebar').onclick = () => {
+                document.body.classList.toggle('sidebar-open');
+            };
 
-                // Pie Chart: Sales by Region
-                const regionData = {};
-                filteredData.forEach(row => {
-                    const region = row.Region || 'Desconhecido';
-                    const amount = parseFloat(row.Amount) || 0;
-                    regionData[region] = (regionData[region] || 0) + amount;
-                });
-                const regionLabels = Object.keys(regionData);
-                const regionValues = Object.values(regionData);
-                if (pieChart) pieChart.destroy();
-                pieChart = new Chart(pieCtx, {
-                    type: 'pie',
-                    data: {
-                        labels: regionLabels,
-                        datasets: [{
-                            data: regionValues,
-                            backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40']
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'bottom'
-                            }
-                        }
+            document.getElementById('exportPDF').onclick = async () => {
+                const toggleBtn = document.getElementById('toggleSidebar');
+                const wasOpen = document.body.classList.contains('sidebar-open');
+                const toggleVisible = toggleBtn.style.display !== 'none';
+                if (wasOpen) document.body.classList.remove('sidebar-open');
+                if (toggleVisible) toggleBtn.style.display = 'none';
+                try {
+                    const canvas = await html2canvas(document.querySelector('.main-content'), { scale: 2 });
+                    const imgData = canvas.toDataURL('image/png');
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    const imgWidth = 210;
+                    const pageHeight = 295;
+                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    let heightLeft = imgHeight;
+                    let position = 0;
+                    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                    while (heightLeft >= 0) {
+                        position = heightLeft - imgHeight;
+                        pdf.addPage();
+                        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                        heightLeft -= pageHeight;
                     }
-                });
-
-                // Bar Chart: Sales by Product
-                const productData = {};
-                filteredData.forEach(row => {
-                    const product = row.Product || 'Desconhecido';
-                    const amount = parseFloat(row.Amount) || 0;
-                    productData[product] = (productData[product] || 0) + amount;
-                });
-                const productLabels = Object.keys(productData);
-                const productValues = Object.values(productData);
-                if (barChart) barChart.destroy();
-                barChart = new Chart(barCtx, {
-                    type: 'bar',
-                    data: {
-                        labels: productLabels,
-                        datasets: [{
-                            label: 'Vendas',
-                            data: productValues,
-                            backgroundColor: '#36A2EB'
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: {
-                                beginAtZero: true
-                            }
-                        },
-                        plugins: {
-                            legend: {
-                                display: false
-                            }
-                        }
-                    }
-                });
-            }
-
-            fileInput.addEventListener('change', handleFile);
+                    pdf.save('dashboard.pdf');
+                } finally {
+                    if (wasOpen) document.body.classList.add('sidebar-open');
+                    if (toggleVisible) toggleBtn.style.display = '';
+                }
+            };
         });
     </script>
 </body>
